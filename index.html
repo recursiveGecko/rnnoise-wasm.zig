@@ -1,0 +1,25 @@
+<html>
+  <head></head>
+  <body>Hello WASM.</body>
+  <script>
+    (async () => {
+      console.log("Loading WASM module...");
+
+      const response = await fetch("/zig-out/lib/audio-toolkit-wasm.wasm");
+      const buffer = await response.arrayBuffer();
+
+      // load and instantiate the WASM module
+      const wasmModule = await WebAssembly.compile(buffer);
+      const wasmInstance = await WebAssembly.instantiate(wasmModule, {
+        // env: {
+        //   memory: new WebAssembly.Memory({ initial: 256, maximum: 256 }),
+        // },
+      });
+
+      window.instance = wasmInstance;
+      window.exports = wasmInstance.exports;
+      console.log("Done");
+
+    })();
+  </script>
+</html>
