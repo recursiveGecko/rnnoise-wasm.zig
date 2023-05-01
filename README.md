@@ -76,6 +76,9 @@ Copyright (c) 2023, recursiveGecko
 [RNNoise](https://github.com/xiph/rnnoise)
 
 Copyright (c) 2017, Mozilla
+
 Copyright (c) 2007-2017, Jean-Marc Valin
+
 Copyright (c) 2005-2017, Xiph.Org Foundation
+
 Copyright (c) 2003-2004, Mark Borgerding
