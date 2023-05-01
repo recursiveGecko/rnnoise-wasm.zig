@@ -2,6 +2,12 @@
 
 This is an experiment that aims to port [RNNoise](https://github.com/xiph/rnnoise) to WASM using custom Zig wrappers.
 
+# Demo
+
+https://recursivegecko.github.io/rnnoise-wasm.zig
+
+Current version is functional, but leaking memory from buffers that transport data between JS and WASM.
+
 # Cloning
 
 ```shell
