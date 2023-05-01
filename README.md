@@ -26,13 +26,9 @@ zig build -Doptimize=ReleaseFast
 
 Produces the following artifacts in `zig-out`:
 
-* `bin/audio-toolkit` - **CLI utility for converting a file**
+* `bin/rnnoise-zig` - **CLI utility for converting a file**
 
-* `lib/audio-toolkit-wasm.wasm` - **WASM application library**
-
-* `lib/librnnoise.a` - Static native library of original RNNoise project
-
-* `lib/librnnoise-wasm.a` - Static WASM library of original RNNoise project
+* `lib/rnnoise-zig.wasm` - **WASM application library**
 
 # CLI
 
@@ -43,7 +39,7 @@ Prepare audio (mp3/wav/etc.) for denoising:
 
 Denoise:
 
-`./zig-out/bin/audio-toolkit <input file> <output file>`
+`./zig-out/bin/rnnoise-zig <input file> <output file>`
 
 
 Play denoised audio:
@@ -82,3 +78,6 @@ Copyright (c) 2007-2017, Jean-Marc Valin
 Copyright (c) 2005-2017, Xiph.Org Foundation
 
 Copyright (c) 2003-2004, Mark Borgerding
+
+---
+

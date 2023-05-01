@@ -33,7 +33,7 @@ fn buildWeb(b: *std.Build, rnnSources: []const []const u8, optimize: std.builtin
     rnnoiseLib.stack_protector = false;
     // rnnoiseLib.use_lld = false;
     // rnnoiseLib.use_llvm = false;
-    b.installArtifact(rnnoiseLib);
+    // b.installArtifact(rnnoiseLib);
 
     const options = b.addOptions();
     // FIXME: When true, it resolves issues with the WASM build (miscompilation?)
@@ -41,7 +41,7 @@ fn buildWeb(b: *std.Build, rnnSources: []const []const u8, optimize: std.builtin
     options.addOption(bool, "provide_minimal_libc", true);
 
     const appLib = b.addSharedLibrary(.{
-        .name = "audio-toolkit-wasm",
+        .name = "rnnoise-zig",
         .root_source_file = .{ .path = "src/main_wasm.zig" },
         .target = wasmTarget,
         .optimize = optimize,
@@ -62,13 +62,13 @@ fn buildDefault(b: *std.Build, rnnSources: []const []const u8, target: CrossTarg
     rnnoiseLib.addCSourceFiles(rnnSources, &.{});
     rnnoiseLib.linkLibC();
     rnnoiseLib.addIncludePath("lib/rnnoise/include");
-    b.installArtifact(rnnoiseLib);
+    // b.installArtifact(rnnoiseLib);
 
     const options = b.addOptions();
     options.addOption(bool, "rnnoise_use_extern", false);
 
     const exe = b.addExecutable(.{
-        .name = "audio-toolkit",
+        .name = "rnnoise-zig",
         .root_source_file = .{ .path = "src/main.zig" },
         .target = target,
         .optimize = optimize,

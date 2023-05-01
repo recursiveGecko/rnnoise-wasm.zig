@@ -127,7 +127,7 @@
   }
 
   async function loadWasm() {
-    const response = fetch("zig-out/lib/audio-toolkit-wasm.wasm");
+    const response = fetch("zig-out/lib/rnnoise-zig.wasm");
 
     // load and instantiate the WASM module
     const wasmModule = await WebAssembly.compileStreaming(response);
