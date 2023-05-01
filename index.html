@@ -21,25 +21,29 @@
 </head>
 
 <body>
-  <h2>Hello WASM RNNoise</h3>
+  <h2>WASM RNNoise Demo</h3>
 
-    <div>
-      <h3>Original audio</h3>
-      <input id="file-upload" type="file">
-      <br>
-      <audio id="original-audio" controls></audio>
-    </div>
+  <a href="https://github.com/recursiveGecko/rnnoise-wasm.zig">GitHub</a>
 
-    <div id="middle">
-      <button id="denoise-button">Denoise</button>
-      <p id="status">Waiting...</p>
-    </div>
+  <br>
+
+  <div>
+    <h3>Original audio</h3>
+    <input id="file-upload" type="file">
+    <br>
+    <audio id="original-audio" controls></audio>
+  </div>
+
+  <div id="middle">
+    <button id="denoise-button">Denoise</button>
+    <p id="status">Waiting...</p>
+  </div>
 
 
-    <div>
-      <h3>Denoised audio</h5>
-        <audio id="denoised-audio" controls></audio>
-    </div>
+  <div>
+    <h3>Denoised audio</h5>
+      <audio id="denoised-audio" controls></audio>
+  </div>
 </body>
 
 
@@ -85,7 +89,7 @@
       const audioBuffer = await audioCtx.decodeAudioData(fileReader.result);
 
       originalSamples = audioBuffer.getChannelData(0);
-      
+
       originalAudio.src = bufferToWavBlob(originalSamples);
 
       setStatus(`Loaded ${audioBuffer.duration.toFixed(1)} seconds of audio (${originalSamples.length} samples)`);
