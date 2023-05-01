@@ -22,7 +22,11 @@ pub fn init(comptime allocator: std.mem.Allocator) type {
         }
 
         pub fn free(ptr: [*]u8) callconv(.C) void {
-           freeWithMetadata(ptr);
+            freeWithMetadata(ptr);
+        }
+
+        pub fn abs(n: c_int) callconv(.C) c_int {
+            return if (n >= 0) n else -n;
         }
 
         fn allocWithMetadata(size: usize) ![]u8 {
@@ -39,8 +43,8 @@ pub fn init(comptime allocator: std.mem.Allocator) type {
         fn freeWithMetadata(ptr: [*]u8) void {
             var metadataPtr = ptr - @sizeOf(AllocationMeta);
             var metadata = std.mem.bytesToValue(AllocationMeta, metadataPtr[0..@sizeOf(AllocationMeta)]);
-            
-            allocator.free(metadataPtr[0..metadata.size + @sizeOf(AllocationMeta)]);
+
+            allocator.free(metadataPtr[0 .. metadata.size + @sizeOf(AllocationMeta)]);
         }
     };
 }

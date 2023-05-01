@@ -1,7 +1,7 @@
 const std = @import("std");
 const CrossTarget = std.zig.CrossTarget;
 
-const rnnoiseIncludePath = "vendor/rnnoise/include";
+const rnnoiseIncludePath = "lib/rnnoise/include";
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -9,7 +9,7 @@ const rnnoiseIncludePath = "vendor/rnnoise/include";
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const rnnSources = try makePrefixedPaths(b.allocator, &.{ "vendor", "rnnoise", "src" }, &.{
+    const rnnSources = try makePrefixedPaths(b.allocator, &.{ "lib", "rnnoise", "src" }, &.{
         "denoise.c",
         "celt_lpc.c",
         "kiss_fft.c",
@@ -18,8 +18,6 @@ pub fn build(b: *std.Build) !void {
         "rnn_reader.c",
         "rnn.c",
     });
-
-    std.debug.print("rnnSources: {s}\n\n", .{rnnSources});
 
     try buildWeb(b, rnnSources, optimize);
     try buildDefault(b, rnnSources, target, optimize);
@@ -50,7 +48,7 @@ fn buildWeb(b: *std.Build, rnnSources: []const []const u8, optimize: std.builtin
     });
     appLib.addIncludePath(rnnoiseIncludePath);
     appLib.linkLibrary(rnnoiseLib);
-    appLib.linkLibC();
+    // appLib.linkLibC();
     appLib.addOptions("build_options", options);
     appLib.rdynamic = true;
     appLib.stack_protector = false;
@@ -63,7 +61,7 @@ fn buildDefault(b: *std.Build, rnnSources: []const []const u8, target: CrossTarg
     const rnnoiseLib = b.addStaticLibrary(.{ .name = "rnnoise", .target = target, .optimize = optimize });
     rnnoiseLib.addCSourceFiles(rnnSources, &.{});
     rnnoiseLib.linkLibC();
-    rnnoiseLib.addIncludePath("vendor/rnnoise/include");
+    rnnoiseLib.addIncludePath("lib/rnnoise/include");
     b.installArtifact(rnnoiseLib);
 
     const options = b.addOptions();
@@ -75,7 +73,7 @@ fn buildDefault(b: *std.Build, rnnSources: []const []const u8, target: CrossTarg
         .target = target,
         .optimize = optimize,
     });
-    exe.addIncludePath("vendor/rnnoise/include");
+    exe.addIncludePath("lib/rnnoise/include");
     exe.linkLibC();
     exe.linkLibrary(rnnoiseLib);
     exe.addOptions("build_options", options);

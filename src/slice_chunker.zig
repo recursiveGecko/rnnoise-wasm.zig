@@ -1,69 +1,77 @@
 const std = @import("std");
 const assert = std.debug.assert;
-const RingBuffer = std.RingBuffer;
 
 /// SliceChunker generates fixed-length chunks from a stream of items.
 pub fn SliceChunker(comptime T: type) type {
     return struct {
-        const ChunkerResult = struct { chunks: ?[]const []const T = null, remaining: usize };
+        const Result = struct { chunks: ?[]const []T = null, remaining: usize };
         const Type: type = T;
 
         allocator: std.mem.Allocator,
-        ringBuffer: RingBuffer,
-        chunkSize: usize,
+        // entirety of the current chunker buffer
+        full_slice: []const T = undefined,
+        // sub-slice of full_slice that is not yet filled
+        write_slice: []T = undefined,
+        chunk_size: usize,
 
         /// Initializes the chunker with a given chunk size
         /// Allocator is stored in the chunker and used for allocating chunks
-        pub fn init(allocator: std.mem.Allocator, chunkSize: usize) !@This() {
-            return @This(){
-                .ringBuffer = try RingBuffer.init(allocator, @sizeOf(T) * chunkSize),
+        pub fn init(allocator: std.mem.Allocator, chunk_size: usize) !@This() {
+            if (chunk_size < 1) return error.InvalidChunkSize;
+
+            var self = @This(){
                 .allocator = allocator,
-                .chunkSize = chunkSize,
+                .chunk_size = chunk_size,
             };
+
+            try self.allocNewBuffer();
+            return self;
         }
 
         /// Deinitializes the chunker, freeing all memory.
         /// ChunkerResults must be freed separately by calling destroyResult()
         pub fn deinit(self: *@This()) void {
-            self.ringBuffer.deinit(self.allocator);
+            self.allocator.free(self.full_slice);
         }
 
         /// Returns the number of items currently stored in the buffer
         pub fn len(self: *@This()) usize {
-            return self.ringBuffer.len() / @sizeOf(T);
+            return self.full_slice.len - self.write_slice.len;
         }
 
         /// Returns the number of items that are needed to complete the chunk
         pub fn lenUntilFull(self: *@This()) usize {
-            return (self.ringBuffer.data.len / @sizeOf(T)) - self.len();
+            return self.write_slice.len;
         }
 
         /// Pushes a single item into the chunker, emitting 0 or 1 chunks
         /// If the result contains chunks, it must be freed by calling destroyResult()
-        pub fn pushOne(self: *@This(), item: T) !ChunkerResult {
+        pub fn pushOne(self: *@This(), item: T) !Result {
             return pushMany(self, &.{item});
         }
 
         /// Pushes an arbitrary number of items into the chunker, emitting 0 or more chunks
         /// If the result contains chunks, it must be freed by calling destroyResult()
-        pub fn pushMany(self: *@This(), items: []const T) !ChunkerResult {
+        pub fn pushMany(self: *@This(), items: []const T) !Result {
             // Determine the number of chunks that will be emitted by this push operation
-            const nExpectedChunks: usize = (self.len() + items.len) / self.chunkSize;
-            var chunks: ?[][]const T = null;
+            const n_expected_chunks: usize = (self.len() + items.len) / self.chunk_size;
+            var chunks: ?[][]T = null;
 
             // Allocate memory for the slice containing the chunks
-            if (nExpectedChunks > 0) {
-                chunks = try self.allocator.alloc([]const T, nExpectedChunks);
+            if (n_expected_chunks > 0) {
+                chunks = try self.allocator.alloc([]T, n_expected_chunks);
             }
 
-            var itemsIdx: usize = 0;
-            var chunkIdx: usize = 0;
+            // track the number of items processed
+            var items_idx: usize = 0;
+            // track the number of chunks allocated
+            var chunk_idx: usize = 0;
 
             // In case of an error, free the memory allocated for the slice of chunks,
             // as well as the individual chunk slices
             errdefer {
                 if (chunks) |c| {
-                    for (0..chunkIdx) |i| {
+                    for (0..chunk_idx) |i| {
                         self.allocator.free(c[i]);
                     }
 
@@ -71,38 +79,42 @@ pub fn SliceChunker(comptime T: type) type {
                 }
             }
 
-            while (itemsIdx < items.len) {
-                // Determine the slice range to insert, making sure we don't insert more items than we have
-                // or more items than we need to fill the buffer
-                const remainingItems = items.len - itemsIdx;
-                const from = itemsIdx;
-                const to = from + @min(self.lenUntilFull(), remainingItems);
+            // insert all items into the chunker, creating chunks as needed
+            while (items_idx < items.len) {
+                // number of items remaining in the input slice
+                const remaining_items = items.len - items_idx;
+                // current insertion index
+                const from = items_idx;
+                // ensure that we don't insert more items than we have
+                // or more than we need to fill the buffer
+                const to = from + @min(self.lenUntilFull(), remaining_items);
+                // slice of input to copy into the buffer
+                const copy_items = items[from..to];
 
-                // RingBuffer operates on raw bytes
-                const insertSlice: []const u8 = std.mem.sliceAsBytes(items[from..to]);
+                // copy the items into the buffer
+                std.mem.copy(T, self.write_slice, copy_items);
+                // advance the write slice
+                self.write_slice = self.write_slice[copy_items.len..];
 
-                // This will never return an error if our calculations are correct
-                self.ringBuffer.writeSlice(insertSlice) catch unreachable;
-
-                // Create a chunk if the buffer is full
+                // if the buffer is full, append the chunk to the slice of chunks
                 if (self.lenUntilFull() == 0) {
-                    assert(nExpectedChunks > chunkIdx);
+                    assert(n_expected_chunks > chunk_idx);
 
-                    chunks.?[chunkIdx] = try self.consumeChunk();
-                    chunkIdx += 1;
+                    chunks.?[chunk_idx] = try self.finalizeChunk();
+                    chunk_idx += 1;
                 }
 
-                itemsIdx = to;
+                items_idx = to;
             }
 
-            return ChunkerResult{
+            return Result{
                 .chunks = chunks,
                 .remaining = self.lenUntilFull(),
             };
         }
 
         /// Frees the result containing 1 or more chunks
-        pub fn destroyResult(self: *@This(), result: ChunkerResult) void {
+        pub fn destroyResult(self: *@This(), result: Result) void {
             if (result.chunks) |chunks| {
                 for (chunks) |chunk| {
                     self.allocator.free(chunk);
@@ -112,28 +124,19 @@ pub fn SliceChunker(comptime T: type) type {
             }
         }
 
-        /// Creates a full chunk from the current buffer contents
-        fn consumeChunk(self: *@This()) ![]T {
-            if (self.lenUntilFull() != 0) {
-                return error.NotEnoughData;
-            }
+        /// Returns the current full chunk and allocates a new one
+        /// Verifies that the chunk is full, otherwise returns an error
+        fn finalizeChunk(self: *@This()) ![]T {
+            if (self.lenUntilFull() != 0) return error.IncompleteChunk;
 
-            // Get the Slice struct containing 2 slices, one for each half of the ring buffer
-            const ringSlice = self.ringBuffer.sliceLast(self.ringBuffer.data.len);
+            const prev_slice = self.full_slice;
+            try self.allocNewBuffer();
+            return @constCast(prev_slice);
+        }
 
-            // Allocate memory for the full chunk and its underlying byte slice
-            const fullChunk: []T = try self.allocator.alloc(T, self.chunkSize);
-            const rawBytes: []u8 = std.mem.sliceAsBytes(fullChunk);
-
-            // Copy data from both halves of the ring buffer into the full chunk
-            std.mem.copy(u8, rawBytes[0..ringSlice.first.len], ringSlice.first);
-            std.mem.copy(u8, rawBytes[ringSlice.first.len..], ringSlice.second);
-
-            // Manually reset the ring buffer indices
-            self.ringBuffer.read_index = 0;
-            self.ringBuffer.write_index = 0;
-
-            return fullChunk;
+        fn allocNewBuffer(self: *@This()) !void {
+            self.write_slice = try self.allocator.alloc(T, self.chunk_size);
+            self.full_slice = self.write_slice;
         }
     };
 }
@@ -146,7 +149,8 @@ test "SliceChunker(i32).pushOne" {
     var chunker = try IntSliceChunker.init(a, 3);
     defer chunker.deinit();
 
-    var result: IntSliceChunker.ChunkerResult = undefined;
+    var result: IntSliceChunker.Result = undefined;
+    var expected_chunk: []const []const IntSliceChunker.Type = undefined;
 
     result = try chunker.pushOne(700);
     try testing.expectEqual(result.chunks, null);
@@ -163,7 +167,8 @@ test "SliceChunker(i32).pushOne" {
     chunker.destroyResult(result);
 
     result = try chunker.pushOne(200);
-    try testing.expectEqualDeep(result.chunks.?, &.{&.{700, -100, 200}});
+    expected_chunk = &.{&.{ 700, -100, 200 }};
+    try testing.expectEqualDeep(expected_chunk, result.chunks.?);
     try testing.expectEqual(result.remaining, 3);
     try testing.expectEqual(chunker.len(), 0);
     try testing.expectEqual(chunker.lenUntilFull(), 3);
@@ -175,7 +180,6 @@ test "SliceChunker(i32).pushOne" {
     try testing.expectEqual(chunker.len(), 1);
     try testing.expectEqual(chunker.lenUntilFull(), 2);
     chunker.destroyResult(result);
-
 }
 
 test "SliceChunker(i32).pushMany" {
@@ -185,25 +189,28 @@ test "SliceChunker(i32).pushMany" {
     var chunker = try IntSliceChunker.init(a, 3);
     defer chunker.deinit();
 
-    var result: IntSliceChunker.ChunkerResult = undefined;
+    var result: IntSliceChunker.Result = undefined;
+    var expected_chunk: []const []const IntSliceChunker.Type = undefined;
 
-    result = try chunker.pushMany(&.{700, 600, 500, 400, 300});
-    try testing.expectEqualDeep(result.chunks.?, &.{&.{700, 600, 500}});
+    result = try chunker.pushMany(&.{ 700, 600, 500, 400, 300 });
+    expected_chunk = &.{&.{ 700, 600, 500 }};
+    try testing.expectEqualDeep(expected_chunk, result.chunks.?);
     try testing.expectEqual(result.remaining, 1);
     try testing.expectEqual(chunker.len(), 2);
     try testing.expectEqual(chunker.lenUntilFull(), 1);
     chunker.destroyResult(result);
 
-
-    result = try chunker.pushMany(&.{10, 20, 30, 40, 50, 60, 70, 80});
-    try testing.expectEqualDeep(result.chunks.?, &.{&.{400, 300, 10}, &.{20, 30, 40}, &.{50, 60, 70}});
+    result = try chunker.pushMany(&.{ 10, 20, 30, 40, 50, 60, 70, 80 });
+    expected_chunk = &.{ &.{ 400, 300, 10 }, &.{ 20, 30, 40 }, &.{ 50, 60, 70 } };
+    try testing.expectEqualDeep(expected_chunk, result.chunks.?);
     try testing.expectEqual(result.remaining, 2);
     try testing.expectEqual(chunker.len(), 1);
     try testing.expectEqual(chunker.lenUntilFull(), 2);
     chunker.destroyResult(result);
 
-    result = try chunker.pushMany(&.{-10, -50});
-    try testing.expectEqualDeep(result.chunks.?, &.{&.{80, -10, -50}});
+    result = try chunker.pushMany(&.{ -10, -50 });
+    expected_chunk = &.{&.{ 80, -10, -50 }};
+    try testing.expectEqualDeep(expected_chunk, result.chunks.?);
     try testing.expectEqual(result.remaining, 3);
     try testing.expectEqual(chunker.len(), 0);
     try testing.expectEqual(chunker.lenUntilFull(), 3);

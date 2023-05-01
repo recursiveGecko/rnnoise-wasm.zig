@@ -1,25 +1,175 @@
 <html>
-  <head></head>
-  <body>Hello WASM.</body>
-  <script>
-    (async () => {
-      console.log("Loading WASM module...");
 
-      const response = await fetch("/zig-out/lib/audio-toolkit-wasm.wasm");
-      const buffer = await response.arrayBuffer();
+<head>
+  <title>WASM RNNoise Demo</title>
+  <style>
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      margin-bottom: 10px;
+    }
 
-      // load and instantiate the WASM module
-      const wasmModule = await WebAssembly.compile(buffer);
-      const wasmInstance = await WebAssembly.instantiate(wasmModule, {
-        // env: {
-        //   memory: new WebAssembly.Memory({ initial: 256, maximum: 256 }),
-        // },
-      });
+    #middle {
+      margin-top: 30px;
+      margin-bottom: 30px;
+    }
+  </style>
+  <script src="https://www.unpkg.com/wavefile@11.0.0/dist/wavefile.js"></script>
+</head>
 
-      window.instance = wasmInstance;
-      window.exports = wasmInstance.exports;
-      console.log("Done");
+<body>
+  <h2>Hello WASM RNNoise</h3>
 
-    })();
-  </script>
+    <div>
+      <h3>Original audio</h3>
+      <input id="file-upload" type="file">
+      <br>
+      <audio id="original-audio" controls></audio>
+    </div>
+
+    <div id="middle">
+      <button id="denoise-button">Denoise</button>
+      <p id="status">Waiting...</p>
+    </div>
+
+
+    <div>
+      <h3>Denoised audio</h5>
+        <audio id="denoised-audio" controls></audio>
+    </div>
+</body>
+
+
+<script>
+  const sampleRate = 48000;
+
+  // Sample rate must be 48kHz for RNNoise to work
+  const audioCtx = new AudioContext({ sampleRate: sampleRate });
+  // const offlineCtx = new OfflineAudioContext({ sampleRate: sampleRate, numberOfChannels: 1 });
+  const fileUpload = document.querySelector('#file-upload');
+  const originalAudio = document.querySelector('#original-audio');
+  const denoisedAudio = document.querySelector('#denoised-audio');
+  const denoiseButton = document.querySelector('#denoise-button');
+  const status = document.querySelector('#status');
+
+  let wasmInstance = undefined;
+  let originalSamples = undefined;
+
+  (async () => {
+    console.log("Loading WASM module...");
+    await loadWasm();
+    console.log("Loaded!");
+
+    const initOk = !!wasmInstance.exports.initialize();
+
+    if (!initOk) {
+      console.error("Failed to initialize WASM module");
+      return;
+    }
+
+    fileUpload.addEventListener('change', onFileUpload);
+    denoiseButton.addEventListener('click', () => denoiseBuffer(originalSamples));
+  })();
+
+  async function onFileUpload() {
+    const file = fileUpload.files[0];
+    const fileReader = new FileReader();
+
+    setStatus(`Loading...`);
+
+    fileReader.onload = async () => {
+      fileUpload.value = null;
+      const audioBuffer = await audioCtx.decodeAudioData(fileReader.result);
+
+      originalSamples = audioBuffer.getChannelData(0);
+      
+      originalAudio.src = bufferToWavBlob(originalSamples);
+
+      setStatus(`Loaded ${audioBuffer.duration.toFixed(1)} seconds of audio (${originalSamples.length} samples)`);
+    }
+
+    fileReader.readAsArrayBuffer(file);
+  }
+
+  async function denoiseBuffer(samples) {
+    setStatus(`Denoising...`);
+
+    const count = samples.length;
+    const duration = count / sampleRate;
+
+
+    //FIXME: memory leak
+    const addr = wasmInstance.exports.malloc(count * 4);
+    const mem = wasmInstance.exports.memory.buffer;
+
+    const wasmSampleBuf = new Float32Array(mem, addr, count);
+    wasmSampleBuf.set(samples);
+
+    const startMs = performance.now();
+    const result = wasmInstance.exports.pushPCM(addr, count);
+    const elapsedMs = performance.now() - startMs;
+
+    const processRate = duration * 1000 / elapsedMs;
+
+    setStatus(`Denoised ${duration.toFixed(2)} seconds in ${(elapsedMs / 1000).toFixed(2)}s (${processRate.toFixed(2)}x realtime)`);
+
+    const parsed = parseResult(result);
+    console.log('pushPCM result (raw)', result, 'parsed', parsed);
+
+    denoisedAudio.src = bufferToWavBlob(parsed.samples);
+  }
+
+  async function loadWasm() {
+    const response = fetch("/zig-out/lib/audio-toolkit-wasm.wasm");
+
+    // load and instantiate the WASM module
+    const wasmModule = await WebAssembly.compileStreaming(response);
+    wasmInstance = await WebAssembly.instantiate(wasmModule, {
+      // env: {
+      //   memory: new WebAssembly.Memory({ initial: 256, maximum: 256 }),
+      // },
+    });
+
+    window.wasmInstance = wasmInstance;
+    window.exports = wasmInstance.exports;
+  }
+
+  function bufferToWavBlob(buffer) {
+    const wav = new wavefile.WaveFile();
+    wav.fromScratch(1, sampleRate, '32f', buffer);
+
+    return URL.createObjectURL(new Blob([wav.toBuffer()], { type: 'audio/wav' }));
+  }
+
+  function parseResult(address) {
+    if (address == 0) {
+      console.log('No result!');
+      return null;
+    }
+
+    const mem = wasmInstance.exports.memory.buffer;
+
+    const vad = (new Float32Array(mem, address, 1))[0];
+    const count = (new Uint32Array(mem, address + 4, 1))[0];
+    const samplesAddress = (new Uint32Array(mem, address + 8, 1))[0];
+
+    const result = {
+      address,
+      vad,
+      count,
+      samplesAddress,
+      samples: new Float32Array(mem, samplesAddress, count),
+    }
+
+    return result;
+  }
+
+  function setStatus(text) {
+    status.innerText = text;
+  }
+</script>
+
 </html>

@@ -1,4 +1,4 @@
 [submodule "vendor/rnnoise"]
-	path = vendor/rnnoise
+	path = lib/rnnoise
 	url = https://github.com/xiph/rnnoise
 	
