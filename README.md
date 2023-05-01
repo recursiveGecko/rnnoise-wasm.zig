@@ -55,3 +55,27 @@ Convert denoised audio to a conventional format (mp3/wav/etc.):
 
 `ffmpeg -f f32le -ar 48000 -ac 1 -i <input file> <output file>`
 
+# License
+
+This project is licensed under the Mozilla Public License, Version 2.0, except for:
+
+* Source files contained in `lib/rnnoise` directory which are licensed under the 
+BSD 3-Clause License by the [RNNoise project](https://github.com/xiph/rnnoise).
+You can find a copy of their license in `lib/rnnoise/COPYING`
+
+# Copyright notice
+
+---
+
+[rnnoise-wasm.zig](https://github.com/recursiveGecko/rnnoise-wasm.zig)
+
+Copyright (c) 2023, recursiveGecko
+
+---
+
+[RNNoise](https://github.com/xiph/rnnoise)
+
+Copyright (c) 2017, Mozilla
+Copyright (c) 2007-2017, Jean-Marc Valin
+Copyright (c) 2005-2017, Xiph.Org Foundation
+Copyright (c) 2003-2004, Mark Borgerding
