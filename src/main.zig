@@ -1,5 +1,5 @@
 const std = @import("std");
-const Denoiser = @import("denoiser.zig");
+const Denoiser = @import("Denoiser.zig");
 const SliceChunker = @import("slice_chunker.zig").SliceChunker;
 
 var std_out = std.io.getStdOut().writer();

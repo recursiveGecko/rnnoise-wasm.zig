@@ -1,7 +1,7 @@
 const std = @import("std");
 const buildOpts = @import("build_options");
-const MinLibC = @import("minimal-libc.zig");
-const Denoiser = @import("denoiser.zig");
+const MinLibC = @import("minimal_libc.zig");
+const Denoiser = @import("Denoiser.zig");
 
 const allocator = std.heap.wasm_allocator;
 var state: ?Denoiser = null;

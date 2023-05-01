@@ -42,7 +42,7 @@ fn buildWeb(b: *std.Build, rnnSources: []const []const u8, optimize: std.builtin
 
     const appLib = b.addSharedLibrary(.{
         .name = "audio-toolkit-wasm",
-        .root_source_file = .{ .path = "src/main-wasm.zig" },
+        .root_source_file = .{ .path = "src/main_wasm.zig" },
         .target = wasmTarget,
         .optimize = optimize,
     });
